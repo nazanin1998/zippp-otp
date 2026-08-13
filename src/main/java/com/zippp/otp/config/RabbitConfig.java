@@ -1,52 +1,32 @@
 package com.zippp.otp.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.springframework.amqp.core.Binding;
-import org.springframework.amqp.core.BindingBuilder;
-import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.QueueBuilder;
-import org.springframework.amqp.core.TopicExchange;
+import com.zippp.otp.config.properties.RabbitOtpProperties;
+import lombok.RequiredArgsConstructor;
+import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
- * RabbitMQ topology for the OTP consumer.
- *
  * <pre>
  *   otp.exchange (topic)
- *     ├─ otp.signup.request          (queue) ── DLX ──► otp.signup.request.dlq
- *     └─ otp.signup.verify          (queue) ── DLX ──► otp.signup.verify.dlq
+ *     ├─ otp.request          (queue) ── DLX ──► otp.request.dlq
+ *     └─ otp.verify          (queue) ── DLX ──► otp.verify.dlq
  * </pre>
- *
- * Producers publish to {@code otp.exchange} with routing keys
- * {@code otp.signup.request} / {@code otp.signup.verify}.
- *
  * RPC reply uses the built-in {@code amq.rabbitmq.reply-to} queue plus a
  * {@code correlationId} header — see {@code spring.rabbitmq.template.reply-timeout}
- * in application.properties.
  */
 @Configuration
+@RequiredArgsConstructor
 public class RabbitConfig {
 
-    public static final String EXCHANGE              = "otp.exchange";
-    public static final String DLX                   = "otp.exchange.dlx";
-
-    public static final String QUEUE_SIGNUP_REQUEST  = "otp.signup.request";
-    public static final String QUEUE_SIGNUP_VERIFY   = "otp.signup.verify";
-
-    public static final String DLQ_SIGNUP_REQUEST    = "otp.signup.request.dlq";
-    public static final String DLQ_SIGNUP_VERIFY     = "otp.signup.verify.dlq";
-
-    public static final String RK_SIGNUP_REQUEST     = "otp.signup.request";
-    public static final String RK_SIGNUP_VERIFY      = "otp.signup.verify";
+    private final RabbitOtpProperties rabbitProperties;
 
     // ------------------------------------------------------------------------
     //  Exchanges
@@ -54,12 +34,12 @@ public class RabbitConfig {
 
     @Bean
     public TopicExchange otpExchange() {
-        return new TopicExchange(EXCHANGE, /*durable*/ true, /*autoDelete*/ false);
+        return new TopicExchange(rabbitProperties.getExchange(), /*durable*/ true, /*autoDelete*/ false);
     }
 
     @Bean
     public TopicExchange otpDlx() {
-        return new TopicExchange(DLX, true, false);
+        return new TopicExchange(rabbitProperties.getDlx(), true, false);
     }
 
     // ------------------------------------------------------------------------
@@ -67,18 +47,18 @@ public class RabbitConfig {
     // ------------------------------------------------------------------------
 
     @Bean
-    public Queue signupRequestQueue() {
-        return QueueBuilder.durable(QUEUE_SIGNUP_REQUEST)
-                .withArgument("x-dead-letter-exchange", DLX)
-                .withArgument("x-dead-letter-routing-key", RK_SIGNUP_REQUEST)
+    public Queue requestQueue() {
+        return QueueBuilder.durable(rabbitProperties.getRequest().getQueue())
+                .withArgument("x-dead-letter-exchange", rabbitProperties.getDlx())
+                .withArgument("x-dead-letter-routing-key", rabbitProperties.getRequest().getRoutingKey())
                 .build();
     }
 
     @Bean
-    public Queue signupVerifyQueue() {
-        return QueueBuilder.durable(QUEUE_SIGNUP_VERIFY)
-                .withArgument("x-dead-letter-exchange", DLX)
-                .withArgument("x-dead-letter-routing-key", RK_SIGNUP_VERIFY)
+    public Queue verifyQueue() {
+        return QueueBuilder.durable(rabbitProperties.getVerify().getQueue())
+                .withArgument("x-dead-letter-exchange", rabbitProperties.getDlx())
+                .withArgument("x-dead-letter-routing-key", rabbitProperties.getVerify().getRoutingKey())
                 .build();
     }
 
@@ -87,13 +67,13 @@ public class RabbitConfig {
     // ------------------------------------------------------------------------
 
     @Bean
-    public Queue signupRequestDlq() {
-        return QueueBuilder.durable(DLQ_SIGNUP_REQUEST).build();
+    public Queue requestDlq() {
+        return QueueBuilder.durable(rabbitProperties.getRequest().getDlq()).build();
     }
 
     @Bean
-    public Queue signupVerifyDlq() {
-        return QueueBuilder.durable(DLQ_SIGNUP_VERIFY).build();
+    public Queue verifyDlq() {
+        return QueueBuilder.durable(rabbitProperties.getVerify().getDlq()).build();
     }
 
     // ------------------------------------------------------------------------
@@ -101,23 +81,23 @@ public class RabbitConfig {
     // ------------------------------------------------------------------------
 
     @Bean
-    public Binding bindSignupRequest(Queue signupRequestQueue, TopicExchange otpExchange) {
-        return BindingBuilder.bind(signupRequestQueue).to(otpExchange).with(RK_SIGNUP_REQUEST);
+    public Binding bindRequest(Queue requestQueue, TopicExchange otpExchange) {
+        return BindingBuilder.bind(requestQueue).to(otpExchange).with(rabbitProperties.getRequest().getRoutingKey());
     }
 
     @Bean
-    public Binding bindSignupVerify(Queue signupVerifyQueue, TopicExchange otpExchange) {
-        return BindingBuilder.bind(signupVerifyQueue).to(otpExchange).with(RK_SIGNUP_VERIFY);
+    public Binding bindVerify(Queue verifyQueue, TopicExchange otpExchange) {
+        return BindingBuilder.bind(verifyQueue).to(otpExchange).with(rabbitProperties.getVerify().getRoutingKey());
     }
 
     @Bean
-    public Binding bindSignupRequestDlq(Queue signupRequestDlq, TopicExchange otpDlx) {
-        return BindingBuilder.bind(signupRequestDlq).to(otpDlx).with(RK_SIGNUP_REQUEST);
+    public Binding bindRequestDlq(Queue requestDlq, TopicExchange otpDlx) {
+        return BindingBuilder.bind(requestDlq).to(otpDlx).with(rabbitProperties.getRequest().getRoutingKey());
     }
 
     @Bean
-    public Binding bindSignupVerifyDlq(Queue signupVerifyDlq, TopicExchange otpDlx) {
-        return BindingBuilder.bind(signupVerifyDlq).to(otpDlx).with(RK_SIGNUP_VERIFY);
+    public Binding bindVerifyDlq(Queue verifyDlq, TopicExchange otpDlx) {
+        return BindingBuilder.bind(verifyDlq).to(otpDlx).with(rabbitProperties.getVerify().getRoutingKey());
     }
 
     // ------------------------------------------------------------------------
@@ -125,13 +105,13 @@ public class RabbitConfig {
     // ------------------------------------------------------------------------
 
     @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper().registerModule(new JavaTimeModule());
+    public JsonMapper jsonMapper() {
+        return JsonMapper.builder().findAndAddModules().build();
     }
 
     @Bean
-    public MessageConverter jsonMessageConverter() {
-        return new Jackson2JsonMessageConverter(objectMapper());
+    public MessageConverter jsonMessageConverter(JsonMapper jsonMapper) {
+        return new JacksonJsonMessageConverter(jsonMapper);
     }
 
     // ------------------------------------------------------------------------
@@ -158,16 +138,14 @@ public class RabbitConfig {
     @Bean
     public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
             ConnectionFactory connectionFactory,
-            MessageConverter jsonMessageConverter,
-            @Value("${otp.rabbit.concurrency:2-8}") String concurrency,
-            @Value("${otp.rabbit.prefetch:10}") int prefetch) {
+            MessageConverter jsonMessageConverter) {
 
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         factory.setConnectionFactory(connectionFactory);
         factory.setMessageConverter(jsonMessageConverter);
-        factory.setConcurrentConsumers(parseMin(concurrency));
-        factory.setMaxConcurrentConsumers(parseMax(concurrency));
-        factory.setPrefetchCount(prefetch);
+        factory.setConcurrentConsumers(rabbitProperties.getMinConcurrency());
+        factory.setMaxConcurrentConsumers(rabbitProperties.getMaxConcurrency());
+        factory.setPrefetchCount(rabbitProperties.getPrefetch());
         // Manual ack — we want explicit control over retries / DLQ routing.
         factory.setAcknowledgeMode(org.springframework.amqp.core.AcknowledgeMode.MANUAL);
         // Default reject behavior: requeue=false → message goes to DLX (then DLQ).
@@ -175,13 +153,4 @@ public class RabbitConfig {
         return factory;
     }
 
-    private static int parseMin(String range) {
-        int dash = range.indexOf('-');
-        return Integer.parseInt(dash < 0 ? range : range.substring(0, dash));
-    }
-
-    private static int parseMax(String range) {
-        int dash = range.indexOf('-');
-        return Integer.parseInt(dash < 0 ? range : range.substring(dash + 1));
-    }
 }
