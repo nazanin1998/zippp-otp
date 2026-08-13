@@ -1,25 +1,25 @@
-package com.zippp.otp.domain;
+package com.zippp.otp.util;
+
+import com.zippp.otp.config.properties.OtpProperties;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 import java.security.SecureRandom;
 
-/**
- * Generates a 6-digit numeric OTP. Padded with leading zeros so the wire
- * format is always 6 chars (e.g. "042317").
- *
- * Uses {@link SecureRandom} — not {@link Math#random()} — because predictability
- * of OTP codes is a critical security property.
- */
+@Component
+@RequiredArgsConstructor
 public final class OtpCodeGenerator {
 
     private static final SecureRandom RANDOM = new SecureRandom();
-    private static final int CODE_LENGTH = 6;
-    private static final int BOUND = 1_000_000; // 10^6
+    private final OtpProperties otpProperties;
 
-    private OtpCodeGenerator() { }
+    public String generate() {
+        int n = RANDOM.nextInt(otpProperties.getBound());
+        return String.format(buildFormat(otpProperties.getCodeLength()), n);
+    }
 
-    public static String generate() {
-        int n = RANDOM.nextInt(BOUND);
-        return String.format("%0" + CODE_LENGTH + "d", n);
+    private static String buildFormat(int len) {
+        return "%0" + len + "d";
     }
 
     public static String hash(String code) {

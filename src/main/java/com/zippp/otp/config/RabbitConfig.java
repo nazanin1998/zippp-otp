@@ -6,11 +6,11 @@ import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
-import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.amqp.support.converter.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.DefaultTyping;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -106,14 +106,18 @@ public class RabbitConfig {
 
     @Bean
     public JsonMapper jsonMapper() {
-        return JsonMapper.builder().findAndAddModules().build();
+        return JsonMapper.builder()
+                .findAndAddModules().build();
     }
+
 
     @Bean
-    public MessageConverter jsonMessageConverter(JsonMapper jsonMapper) {
-        return new JacksonJsonMessageConverter(jsonMapper);
+    public MessageConverter jsonMessageConverter() {
+        JacksonJsonMessageConverter converter = new JacksonJsonMessageConverter();
+        ((DefaultJacksonJavaTypeMapper) converter.getJavaTypeMapper())
+                .addTrustedPackages("com.zippp.otpapi.dto.message", "com.zippp.otpapi.dto.request");
+        return converter;
     }
-
     // ------------------------------------------------------------------------
     //  RabbitTemplate (with reply timeout for sendAndReceive)
     // ------------------------------------------------------------------------

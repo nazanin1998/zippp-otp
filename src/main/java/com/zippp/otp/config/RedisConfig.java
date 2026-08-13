@@ -1,33 +1,27 @@
 package com.zippp.otp.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import tools.jackson.databind.json.JsonMapper;
 
-/**
- * Redis wiring for OTP challenge storage.
- *
- * Key format: {@code otp:challenge:{challengeKey}}
- * Value: JSON-encoded {@code OtpChallenge} (codeHash, attempts, expiresAt, channel, purpose)
- * TTL: 2 minutes (set per-write on the repository).
- */
+
 @Configuration
 public class RedisConfig {
 
-    public static final String CHALLENGE_KEY_PREFIX = "otp:challenge:";
+    public static final String OTP_REQUEST_KEY_PREFIX = "otp:request:";
+    public static final String OTP_PASSED_KEY_PREFIX = "otp:passed:";
 
     @Bean
     public RedisTemplate<String, Object> otpRedisTemplate(
-            RedisConnectionFactory connectionFactory) {
+            RedisConnectionFactory connectionFactory,
+            JsonMapper jsonMapper) {
 
-        ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        GenericJackson2JsonRedisSerializer valueSerializer =
-                new GenericJackson2JsonRedisSerializer(mapper);
+        GenericJacksonJsonRedisSerializer valueSerializer =
+                new GenericJacksonJsonRedisSerializer(jsonMapper);
 
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);

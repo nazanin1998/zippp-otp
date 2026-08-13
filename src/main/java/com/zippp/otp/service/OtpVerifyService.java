@@ -1,8 +1,7 @@
 package com.zippp.otp.service;
 
-import com.zippp.otp.domain.OtpChallenge;
-import com.zippp.otp.domain.OtpChallengeRepository;
-import com.zippp.otp.domain.OtpCodeGenerator;
+import com.zippp.otp.domain.OtpRequest;
+import com.zippp.otp.repository.OtpRequestRepository;
 import com.zippp.otpapi.dto.message.OtpResponseMessage;
 import com.zippp.otpapi.dto.request.OtpVerifyRequest;
 import com.zippp.otpapi.enums.OtpErrorCode;
@@ -32,9 +31,9 @@ public class OtpVerifyService {
 
     private static final Logger log = LoggerFactory.getLogger(OtpVerifyService.class);
 
-    private final OtpChallengeRepository repository;
+    private final OtpRequestRepository repository;
 
-    public OtpVerifyService(OtpChallengeRepository repository) {
+    public OtpVerifyService(OtpRequestRepository repository) {
         this.repository = repository;
     }
 
@@ -48,49 +47,50 @@ public class OtpVerifyService {
                     req.correlationId(), OtpErrorCode.OTP_MISMATCH, "missing otp");
         }
 
-        Optional<OtpChallenge> maybe = repository.find(req.challengeKey());
+        Optional<OtpRequest> maybe = repository.find(req.challengeKey());
         if (maybe.isEmpty()) {
             return OtpResponseMessage.error(
                     req.correlationId(), OtpErrorCode.OTP_NOT_FOUND,
                     "no active challenge for this key");
         }
 
-        OtpChallenge current = maybe.get();
+        OtpRequest current = maybe.get();
         Instant now = Instant.now();
 
         if (current.isExpired(now)) {
-            repository.delete(req.challengeKey());
-            return OtpResponseMessage.error(
-                    req.correlationId(), OtpErrorCode.OTP_EXPIRED, "challenge expired");
+//            repository.delete(req.challengeKey());
+//            return OtpResponseMessage.error(
+//                    req.correlationId(), OtpErrorCode.OTP_EXPIRED, "challenge expired");
         }
+        return null;
 
         // increment attempts FIRST so a malicious concurrent verify can't
         // bypass the attempts cap by reading after match succeeds.
-        Optional<OtpChallenge> afterRmw = repository.incrementAttempts(req.challengeKey());
-        if (afterRmw.isEmpty()) {
-            // Disappeared between read and write — race with TTL.
-            return OtpResponseMessage.error(
-                    req.correlationId(), OtpErrorCode.OTP_EXPIRED, "challenge expired");
-        }
-        OtpChallenge updated = afterRmw.get();
-
-        if (updated.isExhausted()) {
-            repository.delete(req.challengeKey());
-            return OtpResponseMessage.error(
-                    req.correlationId(), OtpErrorCode.OTP_TOO_MANY_ATTEMPTS,
-                    "too many attempts");
-        }
-
-        String submittedHash = OtpCodeGenerator.hash(req.otp());
-        if (!constantTimeEquals(submittedHash, current.codeHash())) {
-            return OtpResponseMessage.error(
-                    req.correlationId(), OtpErrorCode.OTP_MISMATCH, "code does not match");
-        }
-
-        // Success — burn the challenge so it can't be reused.
-        repository.delete(req.challengeKey());
-        log.info("OTP verified challengeKey={}", req.challengeKey());
-        return OtpResponseMessage.ok(req.correlationId());
+//        Optional<OtpRequest> afterRmw = repository.incrementAttempts(req.challengeKey());
+//        if (afterRmw.isEmpty()) {
+//            // Disappeared between read and write — race with TTL.
+//            return OtpResponseMessage.error(
+//                    req.correlationId(), OtpErrorCode.OTP_EXPIRED, "challenge expired");
+//        }
+//        OtpRequest updated = afterRmw.get();
+//
+//        if (updated.isExhausted()) {
+//            repository.delete(req.challengeKey());
+//            return OtpResponseMessage.error(
+//                    req.correlationId(), OtpErrorCode.OTP_TOO_MANY_ATTEMPTS,
+//                    "too many attempts");
+//        }
+//
+//        String submittedHash = OtpCodeGenerator.hash(req.otp());
+//        if (!constantTimeEquals(submittedHash, current.codeHash())) {
+//            return OtpResponseMessage.error(
+//                    req.correlationId(), OtpErrorCode.OTP_MISMATCH, "code does not match");
+//        }
+//
+//        // Success — burn the challenge so it can't be reused.
+//        repository.delete(req.challengeKey());
+//        log.info("OTP verified challengeKey={}", req.challengeKey());
+//        return OtpResponseMessage.ok(req.correlationId());
     }
 
     /** Constant-time comparison to avoid leaking match length via timing. */

@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+        "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+        "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<!--
+    Suppress Checkstyle checks in generated, vendored, or otherwise exempt code.
+    Reference this file from configLocation in maven-checkstyle-plugin if needed.
+-->
+<suppressions>
+    <!-- Generated sources (Spring Boot, Lombok) -->
+    <suppress files="[\\/]target[\\/]generated-sources[\\/]" checks=".*"/>
+    <suppress files="[\\/]target[\\/]generated-test-sources[\\/]" checks=".*"/>
+
+    <!-- Module-info files -->
+    <suppress files="module-info\.java" checks=".*"/>
+</suppressions>
