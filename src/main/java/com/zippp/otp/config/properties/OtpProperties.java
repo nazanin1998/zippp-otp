@@ -13,4 +13,5 @@ import org.springframework.validation.annotation.Validated;
 public class OtpProperties {
     private Integer codeLength = 6;
     private Integer bound = 1_000_000;
+    private boolean testLog = false;
 }

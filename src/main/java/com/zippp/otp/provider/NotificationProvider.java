@@ -16,5 +16,5 @@ public interface NotificationProvider {
 
     OtpChannel channel();
 
-    void send(String target, String code) throws NotificationDeliveryException;
+    void send(String target, String message) throws NotificationDeliveryException;
 }

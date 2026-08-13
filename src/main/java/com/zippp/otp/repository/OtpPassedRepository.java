@@ -2,6 +2,7 @@ package com.zippp.otp.repository;
 
 import com.zippp.otp.config.RedisConfig;
 import com.zippp.otp.domain.OtpRequest;
+import com.zippp.otpapi.enums.OtpPurpose;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -28,6 +29,6 @@ public class OtpPassedRepository {
     }
 
     private static String key(String challengeKey) {
-        return RedisConfig.OTP_PASSED_KEY_PREFIX + challengeKey;
+        return RedisConfig.OTP_PASSED_KEY_PREFIX + OtpPurpose.SIGNUP + ":" + challengeKey;
     }
 }

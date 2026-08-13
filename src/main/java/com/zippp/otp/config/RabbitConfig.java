@@ -151,7 +151,7 @@ public class RabbitConfig {
         factory.setMaxConcurrentConsumers(rabbitProperties.getMaxConcurrency());
         factory.setPrefetchCount(rabbitProperties.getPrefetch());
         // Manual ack — we want explicit control over retries / DLQ routing.
-        factory.setAcknowledgeMode(org.springframework.amqp.core.AcknowledgeMode.MANUAL);
+        factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
         // Default reject behavior: requeue=false → message goes to DLX (then DLQ).
         factory.setDefaultRequeueRejected(false);
         return factory;

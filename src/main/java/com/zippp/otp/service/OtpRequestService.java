@@ -1,5 +1,6 @@
 package com.zippp.otp.service;
 
+import com.zippp.otp.config.properties.OtpProperties;
 import com.zippp.otp.domain.OtpRequest;
 import com.zippp.otp.repository.OtpRequestRepository;
 import com.zippp.otp.util.OtpCodeGenerator;
@@ -15,41 +16,30 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Core business logic for {@code otp.{purpose}.request} handling.
- *
- * Pure logic — no AMQP annotations. The listener class is the thin adapter.
- *
- * Behavior:
- *   1. Generate a 6-digit code and hash it (SHA-256). Plaintext is held in
- *      memory only long enough to call the provider.
- *   2. Persist the challenge in Redis with a 2-minute TTL.
- *   3. Dispatch via the channel-specific provider.
- *   4. Return an {@link OtpResponseMessage} for the RPC reply.
- *
- * Failure modes:
- *   - Bad target / unknown channel: REJECTED (no retry, no DLQ — bad input)
- *   - Provider throws: ERROR with OTP_NOT_FOUND-equivalent — caller-side retry
- *     is the producer's responsibility; the message is acked so it doesn't
- *     loop in our queue. (Change to NACK if you want broker-side retry.)
- */
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OtpRequestService {
 
+    private static final String CODE_REPLACEMENT = "{code}";
     private final OtpRequestRepository repository;
     private final OtpCodeGenerator codeGenerator;
     private final NotificationRouter router;
+    private final OtpProperties properties;
 
     public OtpResponseMessage handle(String correlationId, OtpRequestMessage req) {
         if (req.target() == null || req.target().isBlank()) {
             return OtpResponseMessage.rejected(
                     correlationId, OtpErrorCode.INVALID_PHONE, "missing target");
         }
-
+        if (req.message() == null || req.message().isBlank() || !req.message().contains(CODE_REPLACEMENT)) {
+            return OtpResponseMessage.rejected(
+                    correlationId, OtpErrorCode.INVALID_MESSAGE, "missing message");
+        }
         String code = codeGenerator.generate();
         String hash = OtpCodeGenerator.hash(code);
+        String message = req.message().replace(CODE_REPLACEMENT, code);
         String challengeKey = UUID.randomUUID().toString();
 
         OtpRequest challenge = new OtpRequest(
@@ -61,10 +51,14 @@ public class OtpRequestService {
         repository.save(challengeKey, challenge, req.expiration());
 
         NotificationProvider provider = router.resolve(req.channel());
-        provider.send(req.target(), code);
+        provider.send(req.target(), message);
 
-        log.info("OTP dispatched corrId={} challengeKey={} channel={} purpose={}",
-                correlationId, challengeKey, req.channel(), req.purpose());
+        if (properties.isTestLog()) {
+            log.debug("(TEST-LOG) - request - corrId={} challengeKey={} channel={} purpose={}, target={}, code={}",
+                    correlationId, challengeKey, req.channel(), req.purpose(), req.target(), code);
+        }
+        log.info("OTP dispatched corrId={} challengeKey={} channel={} purpose={}, target={}",
+                correlationId, challengeKey, req.channel(), req.purpose(), req.target());
 
         return OtpResponseMessage.ok(correlationId, challengeKey);
     }
