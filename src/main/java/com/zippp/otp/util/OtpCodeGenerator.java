@@ -22,14 +22,4 @@ public final class OtpCodeGenerator {
         return "%0" + len + "d";
     }
 
-    public static String hash(String code) {
-        try {
-            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
-                    .digest(code.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            return java.util.HexFormat.of().formatHex(digest);
-        } catch (java.security.NoSuchAlgorithmException e) {
-            // SHA-256 is a JDK-mandated algorithm — this branch is unreachable.
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
-    }
 }
