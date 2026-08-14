@@ -17,11 +17,11 @@ public class OtpRequestRepository {
     private final RedisRepository redisRepository;
 
     public void save(String challengeKey, OtpRequest challenge, Duration expiration) {
-        redisRepository.save(key(challengeKey), challenge, expiration);
+        redisRepository.save(key(challengeKey, challenge.purpose()), challenge, expiration);
     }
 
-    public Optional<OtpRequest> find(String challengeKey) {
-        Object value = redisRepository.find(key(challengeKey));
+    public Optional<OtpRequest> find(String challengeKey, OtpPurpose purpose) {
+        Object value = redisRepository.find(key(challengeKey, purpose));
         if (value instanceof OtpRequest c) {
             return Optional.of(c);
         }
@@ -49,10 +49,11 @@ public class OtpRequestRepository {
 //        return Optional.of(updated);
 //    }
 
-//    public void delete(String challengeKey) {
-//        redis.delete(key(challengeKey));
-//    }
-    private static String key(String challengeKey) {
-        return RedisConfig.OTP_REQUEST_KEY_PREFIX + OtpPurpose.SIGNUP + ":" + challengeKey;
+    public void delete(String challengeKey, OtpPurpose purpose) {
+        redisRepository.delete(key(challengeKey, purpose));
+    }
+
+    private static String key(String challengeKey, OtpPurpose purpose) {
+        return RedisConfig.OTP_REQUEST_KEY_PREFIX + purpose + ":" + challengeKey;
     }
 }
