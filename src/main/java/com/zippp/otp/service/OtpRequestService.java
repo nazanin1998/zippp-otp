@@ -10,6 +10,7 @@ import com.zippp.otpapi.dto.message.OtpRequestMessage;
 import com.zippp.otpapi.dto.message.OtpResponseMessage;
 import com.zippp.otpapi.enums.OtpErrorCode;
 import com.zippp.signature.service.JwtSigner;
+import com.zippp.signature.service.SaltedHash;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,7 +41,7 @@ public class OtpRequestService {
                     correlationId, OtpErrorCode.INVALID_MESSAGE, "missing message");
         }
         String code = codeGenerator.generate();
-        String hash = OtpCodeGenerator.hash(code);
+        String hash = SaltedHash.concatenatedSaltAndHash(code);
         String message = req.message().replace(CODE_REPLACEMENT, code);
         String challengeId = UUID.randomUUID().toString();
         String signedChallenge =  jwtSigner.sign(req.target(), challengeId, req.expiration());
