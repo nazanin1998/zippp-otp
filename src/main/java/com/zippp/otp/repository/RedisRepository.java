@@ -20,4 +20,8 @@ public class RedisRepository {
     public Object find(String key) {
         return redis.opsForValue().get(key);
     }
+
+    public Boolean delete(String key) {
+        return redis.delete(key);
+    }
 }
