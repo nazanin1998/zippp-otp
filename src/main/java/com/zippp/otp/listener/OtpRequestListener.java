@@ -27,21 +27,20 @@ public class OtpRequestListener {
 
     @RabbitListener(queues = "${otp.rabbit.request.queue}")
     public OtpResponseMessage onMessage(Message amqpMessage) {
-        String correlationId = null;
+        String correlationId = "UNKNOWN";
         try {
             ConsumerParsedMessage<OtpRequestMessage> result = MessageParser.parsedMessage(
                     amqpMessage, OtpRequestMessage.class, jsonMapper);
 
             correlationId = result.correlationId();
-            log.debug("Received Signup Request message corrId={} payload={}", result.correlationId(), result.payload());
 
             return service.handle(result.correlationId(), result.payload());
 
         } catch (RabbitConsumerFailedToParseException e) {
-            log.error("Failed to parse signup request corrId={}", correlationId == null ? "UNKOWN" : correlationId, e);
+            log.error("Failed to parse signup request corrId={}", correlationId, e);
             return getOtpErrMessage(OtpErrorCode.PARSE_MESSAGE, correlationId, ExceptionUtils.getMessage(e.getCause()));
         } catch (RuntimeException e) {
-            log.error("Failed to process signup request corrId={}", correlationId == null ? "UNKOWN" : correlationId, e);
+            log.error("Failed to process signup request corrId={}", correlationId, e);
             return getOtpErrMessage(OtpErrorCode.INTERNAL_ERROR, correlationId, ExceptionUtils.getMessage(e));
         }
     }
@@ -51,7 +50,7 @@ public class OtpRequestListener {
             String correlationId,
             String message) {
         return OtpResponseMessage.error(
-                correlationId == null ? "UNKOWN" : correlationId,
+                correlationId,
                 errorCode,
                 message);
     }

@@ -9,6 +9,7 @@ import com.zippp.otp.provider.NotificationRouter;
 import com.zippp.otpapi.dto.message.OtpRequestMessage;
 import com.zippp.otpapi.dto.message.OtpResponseMessage;
 import com.zippp.otpapi.enums.OtpErrorCode;
+import com.zippp.signature.service.JwtSigner;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class OtpRequestService {
     private final OtpCodeGenerator codeGenerator;
     private final NotificationRouter router;
     private final OtpProperties properties;
+    private final JwtSigner jwtSigner;
 
     public OtpResponseMessage handle(String correlationId, OtpRequestMessage req) {
         if (req.target() == null || req.target().isBlank()) {
@@ -40,26 +42,28 @@ public class OtpRequestService {
         String code = codeGenerator.generate();
         String hash = OtpCodeGenerator.hash(code);
         String message = req.message().replace(CODE_REPLACEMENT, code);
-        String challengeKey = UUID.randomUUID().toString();
+        String challengeId = UUID.randomUUID().toString();
+        String signedChallenge =  jwtSigner.sign(req.target(), challengeId, req.expiration());
+        Instant expiresAt = Instant.now().plus(req.expiration());
 
-        OtpRequest challenge = new OtpRequest(
+        OtpRequest otpRequest = new OtpRequest(
                 hash,
                 req.channel(),
                 req.purpose(),
-                Instant.now().plus(req.expiration()),
+                expiresAt,
                 0);
-        repository.save(challengeKey, challenge, req.expiration());
+        repository.save(challengeId, otpRequest, req.expiration());
 
         NotificationProvider provider = router.resolve(req.channel());
         provider.send(req.target(), message);
 
         if (properties.isTestLog()) {
             log.debug("(TEST-LOG) - request - corrId={} challengeKey={} channel={} purpose={}, target={}, code={}",
-                    correlationId, challengeKey, req.channel(), req.purpose(), req.target(), code);
+                    correlationId, challengeId, req.channel(), req.purpose(), req.target(), code);
         }
         log.info("OTP dispatched corrId={} challengeKey={} channel={} purpose={}, target={}",
-                correlationId, challengeKey, req.channel(), req.purpose(), req.target());
+                correlationId, challengeId, req.channel(), req.purpose(), req.target());
 
-        return OtpResponseMessage.ok(correlationId, challengeKey);
+        return OtpResponseMessage.ok(correlationId, signedChallenge, expiresAt);
     }
 }
