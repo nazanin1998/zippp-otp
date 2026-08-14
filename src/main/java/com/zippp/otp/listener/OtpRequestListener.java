@@ -37,10 +37,10 @@ public class OtpRequestListener {
             return service.handle(result.correlationId(), result.payload());
 
         } catch (RabbitConsumerFailedToParseException e) {
-            log.error("Failed to parse signup request corrId={}", correlationId, e);
+            log.error("Failed to parse otp request corrId={}", correlationId, e);
             return getOtpErrMessage(OtpErrorCode.PARSE_MESSAGE, correlationId, ExceptionUtils.getMessage(e.getCause()));
         } catch (RuntimeException e) {
-            log.error("Failed to process signup request corrId={}", correlationId, e);
+            log.error("Failed to process otp request corrId={}", correlationId, e);
             return getOtpErrMessage(OtpErrorCode.INTERNAL_ERROR, correlationId, ExceptionUtils.getMessage(e));
         }
     }
