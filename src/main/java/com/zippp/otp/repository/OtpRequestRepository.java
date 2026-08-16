@@ -4,26 +4,32 @@ import com.zippp.otp.config.RedisConfig;
 import com.zippp.otp.domain.OtpRequest;
 import com.zippp.otpapi.enums.OtpPurpose;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Duration;
 import java.util.Optional;
 
-
+@Slf4j
 @Repository
 @RequiredArgsConstructor
 public class OtpRequestRepository {
 
     private final RedisRepository redisRepository;
+    private final JsonMapper jsonMapper;
 
     public void save(String challengeKey, OtpRequest challenge, Duration expiration) {
-        redisRepository.save(key(challengeKey, challenge.purpose()), challenge, expiration);
+        redisRepository.save(key(challengeKey, challenge.getPurpose()), challenge, expiration);
     }
 
     public Optional<OtpRequest> find(String challengeKey, OtpPurpose purpose) {
         Object value = redisRepository.find(key(challengeKey, purpose));
-        if (value instanceof OtpRequest c) {
-            return Optional.of(c);
+        if (value == null) {
+            return Optional.empty();
+        }
+        if (value instanceof OtpRequest) {
+            return Optional.of((OtpRequest) value);
         }
         return Optional.empty();
     }

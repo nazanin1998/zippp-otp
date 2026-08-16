@@ -1,5 +1,6 @@
 package com.zippp.otp.service;
 
+import com.zippp.otp.config.properties.OtpProperties;
 import com.zippp.otp.domain.OtpPassed;
 import com.zippp.otp.repository.OtpPassedRepository;
 import com.zippp.otp.repository.OtpRequestRepository;
@@ -31,13 +32,16 @@ public class OtpVerifyService {
     private final OtpPassedRepository passedRepository;
     private final JwtParser jwtParser;
     private final JwtSigner jwtSigner;
+    private final OtpProperties properties;
 
     public OtpVerifyResponseMessage handle(String correlationId, OtpVerifyRequestMessage req) {
         if (StringUtils.isEmpty(req.signedChallenge())) {
+            log.error("(OTP-VERIFY) - challenge is null or blank, correlationId={}", correlationId);
             return OtpVerifyResponseMessage.rejected(
                     OtpErrorCode.INVALID_CHALLENGE, "missing challengeKey", correlationId);
         }
         if (StringUtils.isEmpty(req.otp())) {
+            log.error("(OTP-VERIFY) - otp is null or blank, correlationId={}", correlationId);
             return OtpVerifyResponseMessage.rejected(
                     OtpErrorCode.OTP_MISMATCH, "missing otp", correlationId);
         }
@@ -52,24 +56,27 @@ public class OtpVerifyService {
             return requestRepository.find(requestChallenge, purpose)
                     .map(otpRequest -> {
                         if (otpRequest.isExpired(Instant.now())) {
+                            log.error("(OTP-VERIFY) - otpRequest record is expired, correlationId={}, expAt={}", correlationId, otpRequest.getExpiresAt());
                             requestRepository.delete(requestChallenge, purpose);
                             return OtpVerifyResponseMessage.verifyFailed(
-                                    OtpErrorCode.OTP_EXPIRED, "challenge expired", correlationId);
+                                    OtpErrorCode.OTP_EXPIRED, "challenge expired", correlationId, target);
                         }
-                        if (!SaltedHash.matches(req.otp(), otpRequest.codeHash())) {
+                        if (!SaltedHash.matches(req.otp(), otpRequest.getCodeHash())) {
+                            log.error("(OTP-VERIFY) - otpRequest record invalid otp exception, correlationId={}", correlationId);
                             return OtpVerifyResponseMessage.verifyFailed(
-                                    OtpErrorCode.OTP_MISMATCH, "code does not match", correlationId);
+                                    OtpErrorCode.OTP_MISMATCH, "code does not match", correlationId, target);
                         }
                         requestRepository.delete(requestChallenge, purpose);
 
                         return saveOtpPassedAndGetResponse(target, correlationId, verifyExpiration, purpose);
                     })
                     .orElseGet(() -> {
-                        log.info("OTP verified challengeKey={}, target={}", requestChallenge, target);
+                        log.error("OTP verified challengeKey={}, target={}", requestChallenge, target);
                         return OtpVerifyResponseMessage.verifyFailed(
-                                OtpErrorCode.OTP_NOT_FOUND, "no active challenge for this key", correlationId);
+                                OtpErrorCode.OTP_NOT_FOUND, "no active challenge for this key", correlationId, target);
                     });
         } catch (SignatureParseException e) {
+            log.error("(OTP-VERIFY) - signature parse exception, correlationId={}, message={}", correlationId, e.getMessage());
             return OtpVerifyResponseMessage.rejected(
                     OtpErrorCode.INVALID_CHALLENGE, "parse signature failure", correlationId);
         }
@@ -88,7 +95,11 @@ public class OtpVerifyService {
         OtpPassed otpPassed = new OtpPassed(purpose, verifyExpiresAt);
         passedRepository.save(verifyChallenge, otpPassed, verifyExpiration);
 
-        log.info("OTP verified challengeKey={}, target={}", verifyChallenge, target);
-        return OtpVerifyResponseMessage.ok(verifySignedChallenge, verifyExpiresAt, correlationId);
+        if (properties.isTestLog()) {
+            log.info("(OTP-VERIFY) - otp verified successfully, correlationId={}, target={}, verifyChallenge={}", correlationId, target, verifyChallenge);
+        } else {
+            log.info("(OTP-VERIFY) - otp verified successfully, correlationId={}, target={}", correlationId, target);
+        }
+        return OtpVerifyResponseMessage.ok(verifySignedChallenge, verifyExpiresAt, correlationId, target);
     }
 }

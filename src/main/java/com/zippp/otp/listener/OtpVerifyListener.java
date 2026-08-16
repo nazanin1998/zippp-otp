@@ -40,6 +40,6 @@ public class OtpVerifyListener extends AbstractOtpListener<OtpVerifyRequestMessa
 
     @Override
     protected OtpVerifyResponseMessage errorResponse(OtpErrorCode code, String correlationId, String message) {
-        return OtpVerifyResponseMessage.error(code, message, correlationId);
+        return OtpVerifyResponseMessage.error(code, message, correlationId, null);
     }
 }

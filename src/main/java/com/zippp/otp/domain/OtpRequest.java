@@ -1,17 +1,26 @@
 package com.zippp.otp.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.zippp.otpapi.enums.OtpChannel;
 import com.zippp.otpapi.enums.OtpPurpose;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
-public record OtpRequest(
-        String     codeHash,
-        OtpChannel channel,
-        OtpPurpose purpose,
-        Instant    expiresAt,
-        int        attempts
-) {
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class OtpRequest {
+
+    private String codeHash;
+    private OtpChannel channel;
+    private OtpPurpose purpose;
+    private Instant expiresAt;
+    private int attempts;
+
     public static final int MAX_ATTEMPTS = 5;
 
     public boolean isExpired(Instant now) {
@@ -19,7 +28,7 @@ public record OtpRequest(
     }
 
     public boolean isExhausted() {
-        return attempts >= MAX_ATTEMPTS;
+        return this.attempts >= MAX_ATTEMPTS;
     }
 
     public OtpRequest withIncrementedAttempts() {
