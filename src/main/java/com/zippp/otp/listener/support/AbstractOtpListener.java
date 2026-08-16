@@ -45,11 +45,11 @@ public abstract class AbstractOtpListener<Req, Res> {
             return response;
 
         } catch (RabbitConsumerFailedToParseException e) {
-            log.error("Failed to parse otp message corrId={} queue={}", correlationId, queue, e);
+            log.error("(LISTENER) - Failed to parse otp message corrId={} queue={}", correlationId, queue, e);
             metrics.recordParseError(queue, sample);
             return errorResponse(OtpErrorCode.PARSE_MESSAGE, correlationId, ExceptionMessage.of(e));
         } catch (RuntimeException e) {
-            log.error("Unexpected failure otp message corrId={} queue={}", correlationId, queue, e);
+            log.error("(LISTENER) - Unexpected failure otp message corrId={} queue={}", correlationId, queue, e);
             metrics.recordInternalError(queue, sample);
             throw e;
         } finally {

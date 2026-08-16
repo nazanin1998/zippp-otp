@@ -5,10 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-/**
- * Stub push notification provider. Logs the code instead of calling
- * Firebase / OneSignal / APNs. Replace with a real adapter when integrating.
- */
+
 @Component
 public class PushProvider implements NotificationProvider {
 
@@ -20,8 +17,8 @@ public class PushProvider implements NotificationProvider {
     }
 
     @Override
-    public void send(String target, String code) {
-        log.info("[PUSH stub] target={} code={}", target, code);
+    public void send(String target, String message) {
+        log.info("[PUSH stub] target={} message={}", target, message);
         // TODO: integrate Firebase / OneSignal / APNs here.
     }
 }
