@@ -8,6 +8,7 @@ import com.zippp.otpapi.dto.message.OtpVerifyResponseMessage;
 import com.zippp.otpapi.enums.OtpErrorCode;
 import com.zippp.otpapi.enums.OtpPurpose;
 import com.zippp.signature.dto.ParsedJwtDto;
+import com.zippp.signature.exception.SignatureParseException;
 import com.zippp.signature.service.JwtParser;
 import com.zippp.signature.service.JwtSigner;
 import com.zippp.signature.service.SaltedHash;
@@ -44,27 +45,34 @@ public class OtpVerifyService {
         final OtpPurpose purpose = req.purpose();
         final Duration verifyExpiration = req.expiration();
 
-        final ParsedJwtDto parsed = jwtParser.parseAndGetFirstValue(req.signedChallenge());
-        final String target = parsed.getUser();
-        final String requestChallenge = parsed.getValue();
-
-        return requestRepository.find(requestChallenge, purpose)
-                .map(otpRequest -> {
-                    if (otpRequest.isExpired(Instant.now())) {
+        try {
+            final ParsedJwtDto parsed = jwtParser.parseAndGetFirstValue(req.signedChallenge());
+            final String target = parsed.getUser();
+            final String requestChallenge = parsed.getValue();
+            return requestRepository.find(requestChallenge, purpose)
+                    .map(otpRequest -> {
+                        if (otpRequest.isExpired(Instant.now())) {
+                            requestRepository.delete(requestChallenge, purpose);
+                            return OtpVerifyResponseMessage.verifyFailed(
+                                    OtpErrorCode.OTP_EXPIRED, "challenge expired", correlationId);
+                        }
+                        if (!SaltedHash.matches(req.otp(), otpRequest.codeHash())) {
+                            return OtpVerifyResponseMessage.verifyFailed(
+                                    OtpErrorCode.OTP_MISMATCH, "code does not match", correlationId);
+                        }
                         requestRepository.delete(requestChallenge, purpose);
-                        return OtpVerifyResponseMessage.verifyFailed(
-                                OtpErrorCode.OTP_EXPIRED, "challenge expired", correlationId);
-                    }
-                    if (!SaltedHash.matches(req.otp(), otpRequest.codeHash())) {
-                        return OtpVerifyResponseMessage.verifyFailed(
-                                OtpErrorCode.OTP_MISMATCH, "code does not match", correlationId);
-                    }
-                    requestRepository.delete(requestChallenge, purpose);
 
-                    return saveOtpPassedAndGetResponse(target, correlationId, verifyExpiration, purpose);
-                })
-                .orElse(OtpVerifyResponseMessage.verifyFailed(
-                                OtpErrorCode.OTP_NOT_FOUND, "no active challenge for this key", correlationId));
+                        return saveOtpPassedAndGetResponse(target, correlationId, verifyExpiration, purpose);
+                    })
+                    .orElseGet(() -> {
+                        log.info("OTP verified challengeKey={}, target={}", requestChallenge, target);
+                        return OtpVerifyResponseMessage.verifyFailed(
+                                OtpErrorCode.OTP_NOT_FOUND, "no active challenge for this key", correlationId);
+                    });
+        } catch (SignatureParseException e) {
+            return OtpVerifyResponseMessage.rejected(
+                    OtpErrorCode.INVALID_CHALLENGE, "parse signature failure", correlationId);
+        }
     }
 
     private OtpVerifyResponseMessage saveOtpPassedAndGetResponse(
